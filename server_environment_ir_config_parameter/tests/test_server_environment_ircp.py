@@ -17,6 +17,7 @@ CONFIG = """
     other_ircp_without_record=other_config_value_without_record
     ircp_empty=
     mail.catchall.alias=my_alias
+    ircp_int=42
 """
 
 
@@ -45,7 +46,7 @@ class TestEnv(ServerEnvironmentCase):
             res = self.ICP.search([("key", "=", "ircp_from_config")])
             self.assertFalse(res)
             # read so it's created in db
-            value = self.ICP.get_param("ircp_from_config")
+            value = self.ICP.get_str("ircp_from_config")
             self.assertEqual(value, "config_value")
             # now it's in db
             res = self.ICP.search([("key", "=", "ircp_from_config")])
@@ -58,14 +59,14 @@ class TestEnv(ServerEnvironmentCase):
             public=self.env_config, serv_config_class=ir_config_parameter
         ):
             # when creating, the value is overridden by config file
-            self.ICP.set_param("ircp_from_config", "new_value")
-            value = self.ICP.get_param("ircp_from_config")
+            self.ICP.set_str("ircp_from_config", "new_value")
+            value = self.ICP.get_str("ircp_from_config")
             self.assertEqual(value, "config_value")
             # when writing, the value is overridden by config file
             res = self.ICP.search([("key", "=", "ircp_from_config")])
             self.assertEqual(len(res), 1)
             res.write({"value": "new_value"})
-            value = self.ICP.get_param("ircp_from_config")
+            value = self.ICP.get_str("ircp_from_config")
             self.assertEqual(value, "config_value")
             # unlink works normally...
             res = self.ICP.search([("key", "=", "ircp_from_config")])
@@ -74,7 +75,7 @@ class TestEnv(ServerEnvironmentCase):
             res = self.ICP.search([("key", "=", "ircp_from_config")])
             self.assertEqual(len(res), 0)
             # but the value is recreated when getting param again
-            value = self.ICP.get_param("ircp_from_config")
+            value = self.ICP.get_str("ircp_from_config")
             self.assertEqual(value, "config_value")
             res = self.ICP.search([("key", "=", "ircp_from_config")])
             self.assertEqual(len(res), 1)
@@ -84,8 +85,8 @@ class TestEnv(ServerEnvironmentCase):
         with self.load_config(
             public=self.env_config, serv_config_class=ir_config_parameter
         ):
-            self.ICP.set_param("some.param", "new_value")
-            self.assertEqual(self.ICP.get_param("some.param"), "new_value")
+            self.ICP.set_str("some.param", "new_value")
+            self.assertEqual(self.ICP.get_str("some.param"), "new_value")
             res = self.ICP.search([("key", "=", "some.param")])
             res.unlink()
             res = self.ICP.search([("key", "=", "some.param")])
@@ -97,8 +98,8 @@ class TestEnv(ServerEnvironmentCase):
             public=self.env_config, serv_config_class=ir_config_parameter
         ):
             with self.assertRaises(UserError):
-                self.ICP.get_param("ircp_empty")
-            self.assertEqual(self.ICP.get_param("ircp_nonexistant"), False)
+                self.ICP.get_str("ircp_empty")
+            self.assertEqual(self.ICP.get_str("ircp_nonexistant", False), False)
 
     def test_override_xmldata(self):
         with self.load_config(
@@ -107,8 +108,21 @@ class TestEnv(ServerEnvironmentCase):
             self._load_xml(
                 "server_environment_ir_config_parameter", "tests/config_param_test.xml"
             )
-            value = self.ICP.get_param("ircp_from_config")
+            value = self.ICP.get_str("ircp_from_config")
             self.assertEqual(value, "config_value")
+
+    def test_typed_getters(self):
+        """Typed getters read the value from config, too"""
+        with self.load_config(
+            public=self.env_config, serv_config_class=ir_config_parameter
+        ):
+            self.assertEqual(self.ICP.get_int("ircp_int"), 42)
+            self.assertEqual(self.ICP.get_str("ircp_int"), "42")
+            # a config value that does not convert falls back to the default
+            with self.assertLogs(ir_config_parameter.__name__, level="WARNING"):
+                self.assertEqual(self.ICP.get_int("ircp_from_config", 7), 7)
+            res = self.ICP.search([("key", "=", "ircp_int")])
+            self.assertEqual(res.value, "42")
 
     def test_read_mail_catchall_alias(self):
         """read mail.catchall.alias from server env:
@@ -117,7 +131,7 @@ class TestEnv(ServerEnvironmentCase):
         with self.load_config(
             public=self.env_config, serv_config_class=ir_config_parameter
         ):
-            value = self.ICP.get_param("mail.catchall.alias")
+            value = self.ICP.get_str("mail.catchall.alias")
             self.assertEqual(value, "my_alias")
             res = self.ICP.search([("key", "=", "mail.catchall.alias")])
             self.assertEqual(len(res), 1)
@@ -140,8 +154,8 @@ class TestEnv(ServerEnvironmentCase):
             (icp1 | icp2).write({"value": "test"})
             self.assertEqual(icp1.value, "config_value")
             self.assertEqual(icp2.value, "other_config_value")
-            self.assertEqual(ICP.get_param(icp1.key), "config_value")
-            self.assertEqual(ICP.get_param(icp2.key), "other_config_value")
+            self.assertEqual(ICP.get_str(icp1.key), "config_value")
+            self.assertEqual(ICP.get_str(icp2.key), "other_config_value")
 
     def test_create(self):
         self._load_xml(

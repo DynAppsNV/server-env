@@ -1,10 +1,15 @@
 # Copyright 2016-2018 ACSONE SA/NV
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
 
+import logging
+
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
+from odoo.addons.base.models.ir_config_parameter import INVALID_VALUE
 from odoo.addons.server_environment.server_env import serv_config
+
+_logger = logging.getLogger(__name__)
 
 SECTION = "ir.config_parameter"
 
@@ -24,35 +29,35 @@ class IrConfigParameter(models.Model):
         for parameter in self:
             parameter.is_environment = serv_config.has_option(SECTION, parameter.key)
 
-    @api.model
-    def get_param(self, key, default=False):
-        value = super().get_param(key, default=None)
-        if serv_config.has_option(SECTION, key):
-            cvalue = serv_config.get(SECTION, key)
-            if not cvalue:
-                raise UserError(
-                    self.env._("Key %s is empty in server_environment_file", key)
-                )
-            if cvalue != value:
-                # we write in db on first access;
-                # should we have preloaded values in database at,
-                # server startup, modules loading their parameters
-                # from data files would break on unique key error.
-                if not self.env.context.get("_from_get_param", 0):
-                    # the check is to avoid recursion, for instance the mail
-                    # addon has an override in ir.config_parameter::write which
-                    # calls get_param if we are setting mail.catchall.alias and
-                    # this will cause an infinite recursion. We cut that
-                    # recursion by using the context check.
-                    #
-                    # The mail addon call to get_param expects to get the value
-                    # *before* the change, so we have to return the database
-                    # value in that case
-                    self.sudo().with_context(_from_get_param=1).set_param(key, cvalue)
-                    value = cvalue
-        if value is None:
-            return default
-        return value
+    def _get(self, key, type_="str"):
+        # all typed getters (get_str, get_int, ...) and setters read through _get
+        value, id_ = super()._get(key, type_)
+        if not serv_config.has_option(SECTION, key):
+            return value, id_
+        cvalue = serv_config.get(SECTION, key)
+        if not cvalue:
+            raise UserError(
+                self.env._("Key %s is empty in server_environment_file", key)
+            )
+        if super()._get(key, "str")[0] != cvalue:
+            # we write in db on first access;
+            # should we have preloaded values in database at,
+            # server startup, modules loading their parameters
+            # from data files would break on unique key error.
+            if id_:
+                self.sudo().browse(id_).write({"value": cvalue})
+            else:
+                id_ = self.sudo().create({"key": key, "value": cvalue}).id
+        try:
+            return self._convert(cvalue, type_), id_
+        except ValueError:
+            _logger.warning(
+                "server environment key %s has invalid value %r for type %s",
+                key,
+                cvalue,
+                type_,
+            )
+            return INVALID_VALUE, id_
 
     @api.model_create_multi
     def create(self, vals_list):
