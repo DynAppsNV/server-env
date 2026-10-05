@@ -25,10 +25,10 @@ def get_server_environment():
     # inspired by server/bin/service/web_services.py
     try:
         rev_id = "git:{}".format(_get_output("git rev-parse HEAD"))
-    except Exception:
+    except Exception:  # noqa: BLE001
         try:
             rev_id = "bzr: {}".format(_get_output("bzr revision-info"))
-        except Exception:
+        except Exception:  # noqa: BLE001
             rev_id = "Can not retrieve revison from git or bzr"
 
     os_lang = ".".join([x for x in locale.getlocale() if x])

@@ -6,7 +6,7 @@ from odoo import api, models
 
 class FakePartner(models.Model):
     _name = "res.partner"
-    _inherit = ["res.partner", "server.env.mixin"]
+    _inherit = ["res.partner", "server.env.mixin"]  # noqa: RUF012
 
     @property
     def _server_env_fields(self):

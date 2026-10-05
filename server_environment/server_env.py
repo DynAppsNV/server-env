@@ -69,7 +69,7 @@ if _dir:
     ck_path = os.path.join(_dir, system_base_config["running_env"])
 
     if not os.path.exists(ck_path):
-        raise Exception(
+        raise Exception(  # noqa: TRY002
             f"Provided server environment does not exist, please add a folder {ck_path}"
         )
 
@@ -117,7 +117,9 @@ def _load_config_from_server_env_files(config_p):
     try:
         config_p.read(conf_files)
     except Exception as e:
-        raise Exception(f'Cannot read config files "{conf_files}":  {e}') from e
+        raise Exception(  # noqa: TRY002
+            f'Cannot read config files "{conf_files}":  {e}'
+        ) from e
 
 
 def _load_config_from_rcfile(config_p):
@@ -132,7 +134,7 @@ def _load_config_from_env(config_p):
             try:
                 config_p.read_string(env_config)
             except configparser.Error as err:
-                raise Exception(
+                raise Exception(  # noqa: TRY002
                     f"{varname} content could not be parsed: {err}"
                 ) from err
 
@@ -214,8 +216,9 @@ class ServerConfiguration(models.TransientModel):
                 col_name,
                 tmp_field,
             )
-            tmp_field.name = col_name
-            ServerConfiguration._field_definitions.append(tmp_field)
+            # setattr() does not trigger __set_name__, which registers the field
+            # on the model definition (name, _module, _field_definitions)
+            tmp_field.__set_name__(ServerConfiguration, col_name)
             cls._conf_defaults[col_name] = value
 
     @classmethod
@@ -296,7 +299,7 @@ class ServerConfiguration(models.TransientModel):
         res = super().get_view(view_id, view_type, **options)
         View = self.env["ir.ui.view"].browse(view_id)
         if view_type == "form":
-            arch, models = View.postprocess_and_fields(
+            arch, _models = View.postprocess_and_fields(
                 self._arch, model=self._name, **options
             )
             res["arch"] = arch

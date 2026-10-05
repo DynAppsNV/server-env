@@ -127,7 +127,7 @@ class ServerEnvMixin(models.AbstractModel):
 
     server_env_defaults = Serialized()
 
-    _server_env_getter_mapping = {
+    _server_env_getter_mapping = {  # noqa: RUF012
         "integer": "getint",
         "float": "getfloat",
         "monetary": "getfloat",
@@ -203,7 +203,7 @@ class ServerEnvMixin(models.AbstractModel):
             # when the for is initialized there's no value yet.
             return
         base = self._server_env_global_section_name()
-        return ".".join((base, val))
+        return f"{base}.{val}"
 
     def _server_env_read_from_config(self, field_name, config_getter):
         self.ensure_one()
@@ -218,7 +218,7 @@ class ServerEnvMixin(models.AbstractModel):
                 value = getter(section_name, field_name)
             else:
                 value = getter(global_section_name, field_name)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             _logger.error(
                 "Unable to read field %s in section %s: %s", field_name, section_name, e
             )
@@ -423,6 +423,13 @@ class ServerEnvMixin(models.AbstractModel):
             self._server_env_add_default_field(field)
             self._server_env_transform_field_to_read_from_env(field)
             self._server_env_add_is_editable_field(field)
+        # the update order of the fields is computed before this hook: register
+        # the fields added above, or writing them raises a KeyError
+        model_cls = self.env.registry[self._name]
+        update_order = model_cls._fields_update_order__
+        for field in model_cls._fields.values():
+            if field not in update_order:
+                update_order[field] = (field.write_sequence, len(update_order))
         return super()._post_model_setup__()
 
     @api.model
