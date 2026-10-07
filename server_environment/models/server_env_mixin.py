@@ -27,9 +27,10 @@ class _partialmethod(partialmethod):
     Introduced by https://github.com/odoo/odoo/commit/36544651f2049bcf18777091dbf02c9631b33243
     """
 
-    def __init__(self, func, *args, **keywords):
-        self.__name__ = keywords.pop("__name__", None)
-        super().__init__(func, *args, **keywords)
+    # partialmethod is constructed in __init__ before Python 3.14 and in
+    # __new__ from 3.14 on, so don't override the constructor: callers set
+    # __name__ on the instance.
+    __name__ = None
 
     def __get__(self, obj, cls=None):
         res = super().__get__(obj, cls=cls)
@@ -354,9 +355,8 @@ class ServerEnvMixin(models.AbstractModel):
         field.compute = "_compute_server_env"
 
         inverse_method_name = f"_inverse_server_env_{field.name}"
-        inverse_method = _partialmethod(
-            type(self)._inverse_server_env, field.name, __name__=inverse_method_name
-        )
+        inverse_method = _partialmethod(type(self)._inverse_server_env, field.name)
+        inverse_method.__name__ = inverse_method_name
         setattr(type(self), inverse_method_name, inverse_method)
         field.inverse = inverse_method_name
         field.store = False
